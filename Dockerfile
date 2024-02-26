@@ -13,5 +13,5 @@ WORKDIR /usr/src/medtronic_task
 COPY . .
 RUN mkdir build && cd build && cmake .. && make
 
-#CMD ["ctest", "-V", "--test-dir", "./build/test"]
-CMD ["./build/src/medtronic_task"]
+ENV GTEST_COLOR=1
+CMD ["bash", "docker_helper.sh"]

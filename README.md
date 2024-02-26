@@ -1,5 +1,7 @@
 Medtronic Task
 ==============
+A take-home task by Medtronic.
+
 Dependencies
 ------------
 The following libraries have been used in the development of this project:
@@ -7,6 +9,7 @@ The following libraries have been used in the development of this project:
 - spdlog (version 1.9.2)
 - GTest/ GMock (version 1.11.0)
 - CMake (version 3.22)
+- (Optional) docker
 
 Building Instruction
 --------------------
@@ -20,10 +23,15 @@ $> cmake .. && make
 This will create a main application, `build/src/medtronic_task`, and a unit test suite
 application in `build/test/medtronic_task_tests`.
 
+Alternatively, the entire build and execution can be done using docker:
+
 ```bash
 $> docker build -t medtronic_task .
 $> docker run --rm -it medtronic_task
 ```
+
+Once the container is run, you'll be prompted whether you want to run the unit test
+suite or the application.
 
 Usage
 -----
