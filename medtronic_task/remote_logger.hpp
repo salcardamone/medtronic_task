@@ -155,16 +155,33 @@ class RemoteLogger {
       // we've been told to stop
       if (stop_injection_.load()) break;
 
-      auto datum = std::move(buffer_.front());
-      buffer_.pop_front();
+      // Take all the data from the injection buffer. If the injection thread is
+      // performing a send and a sensor sticks a state onto the injection buffer
+      // while the injection thread isn't waiting at the condition variable
+      // above, it'll miss being notified of a sensor state being ready. So once
+      // the send is complete, it'll just wait at the condition variable till
+      // the next notification by a sensor, at which point there are two sensor
+      // states in the injection buffer
+      auto data = std::move(buffer_);
 
       // Unlock here so sensors can still dump to the buffer even if we need
       // to re-establish a connection
       lock.unlock();
 
-      spdlog::debug("Injection thread recovers data from buffer.");
-      while (socket_->sendx(datum) == -1) {
-        reestablish_connection();
+      spdlog::debug(
+          "Injection thread recovers data from buffer with {} sensor state/s.",
+          data.size());
+
+      // Purge the entirety of the injection buffer
+      while (!data.empty()) {
+        auto datum = std::move(data.front());
+        data.pop_front();
+        // If we can't send the data for some unforeseen circumstance, just
+        // default to assuming the connection is broken and attempt to
+        // re-establish, then try to send again
+        while (socket_->sendx(datum) == -1) {
+          reestablish_connection();
+        }
       }
       spdlog::debug("Injection thread has sent data to host.");
     }

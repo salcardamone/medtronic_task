@@ -11,7 +11,7 @@ RUN apt install -y \
     
 WORKDIR /usr/src/medtronic_task
 COPY . .
-RUN mkdir build && cd build && cmake .. && make
+RUN mkdir build && cd build && cmake .. && make -j 4
 
 ENV GTEST_COLOR=1
 CMD ["bash", "docker_helper.sh"]

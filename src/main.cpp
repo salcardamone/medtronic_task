@@ -22,10 +22,10 @@ using namespace medtronic;
 int main(int argc, char* argv[]) {
   spdlog::set_level(spdlog::level::info);
 
-  int num_sensors = 1;
+  std::size_t num_sensors = 1;
   if (argc == 2) {
-    num_sensors = atoi(argv[1]);
-    if (num_sensors > 4 || num_sensors <= 0) {
+    num_sensors = static_cast<std::size_t>(atoi(argv[1]));
+    if (num_sensors > 4 || num_sensors == 0) {
       spdlog::error("Must choose 1 - 4 sensors.");
       return -1;
     }
@@ -38,7 +38,7 @@ int main(int argc, char* argv[]) {
   logger.run();
 
   std::vector<Sensor> sensors;
-  for (int isensor = 0; isensor < num_sensors; ++isensor)
+  for (std::size_t isensor = 0; isensor < num_sensors; ++isensor)
     sensors.push_back(Sensor());
 
   // Sensor loop to dump state indefinitely to remote host
@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
 
   // Launch each sensor worker
   std::vector<std::thread> sensor_workers;
-  for (int isensor = 0; isensor < sensors.size(); ++isensor) {
+  for (std::size_t isensor = 0; isensor < sensors.size(); ++isensor) {
     auto sensor_worker = std::thread(
         [sensor_run, &sensors, isensor] { sensor_run(sensors[isensor]); });
     sensor_workers.push_back(std::move(sensor_worker));
