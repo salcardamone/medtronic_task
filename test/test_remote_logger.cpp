@@ -1,10 +1,10 @@
 /**
- * @brief
+ * @brief Testing of the RemoteLogger class. Mix of unit and integration tests.
  */
 // C++ Standard Libraries
-#include <fstream>
 #include <memory>
 #include <thread>
+#include <fstream>
 // Third-Party Libraries
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -30,6 +30,8 @@ class RemoteLoggerTestFixture : public ::testing::Test {
  protected:
   void SetUp() override {
     std::ofstream serialised_data(filename);
+    // Note the addition of the "For Removal"; we want to make sure anything not
+    // sandwiched between demarcation lines is ignored
     if (serialised_data.is_open()) {
       serialised_data << "For Removal";
       serialised_data << dummy_serialised_buffer;
@@ -160,7 +162,7 @@ TEST_F(RemoteLoggerTestFixture, SerialiseStates) {
 
   EXPECT_CALL(*socket, host()).WillRepeatedly(ReturnRef(hostname));
 
-  // Force the RemoteLogger destructor
+  // Force the RemoteLogger destructor to dump injection buffer to disk
   {
     Sensor sensor;
     RemoteLogger logger(socket);

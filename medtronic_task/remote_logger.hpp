@@ -27,20 +27,39 @@ namespace medtronic {
  * There are two ways we can log state asynchronously:
  *
  * (1) Producer/ Consumer
- *     log_state() dumps data to a FIFO. Another thread created in constructor
- *     is waiting for data in the FIFO, at which point it dumps the data across
- *     the network. The FIFO is obviously the shared state across threads.
+ *     log_state() dumps data to a FIFO. Another thread (the consumer)
+ *     is waiting for data in the FIFO, at which point it pops any data and
+ *     dumps it across the network to the remote host. The FIFO is shared
+ *     between producer and consumer threads, and has to be protected for any
+ *     data races.
  * (2) Futures
  *     Each time log_state() gets called, it spawns a thread that tries to dump
- *     data across the network. The future associated with that thread is kept
- *     in a container, and the container is periodically purged of futures that
- *     are ready (i.e. data has been sent).
+ *     data across the network to the remote host. The future associated with
+ *     that thread is kept in a container, and the container is periodically
+ *     purged of futures that are ready (when the data in that thread has been
+ *     sent).
  *
  * In the case where we lose network connectivity, (1) is preferable since
  * there's only a single thread trying to reconnect to the remote host, as
  * opposed to (2) where multiple threads are potentially trying to reconnect.
  * Also, if we need to dump to disk because of a poweroff, (1) is preferable
- * since a single thread can just flush the FIFO to disk.
+ * since a single thread can just flush the FIFO to disk (and there's no trivial
+ * way to extract arguments passed to threads; we'd have to retain additional
+ * state).
+ *
+ * So, this class is architected as follows:
+ * - A single injection thread is created, waiting for data to be pushed to an
+ *   injection buffer.
+ * - When a sensor wants to log state, it calls the log_state() method. This
+ *   acquires the mutex guarding the injection buffer and places the state
+ *   there, before returning.
+ * - The injection thread sees the injection buffer has pending data. It
+ *   acquires the mutex guarding the injection buffer and takes any data that
+ * was waiting there.
+ * - The injection thread releases the mutex guarding the injection buffer,
+ *   allowing and sensors to push state to it once again. It attempts to send
+ * data to the remote host, and returns to waiting for data to be pushed to the
+ *   injection buffer.
  */
 class RemoteLogger {
  public:
@@ -54,8 +73,11 @@ class RemoteLogger {
    */
   RemoteLogger(std::shared_ptr<ClientSocketInterface> socket)
       : socket_{socket} {
+    // Check whether we have any serialised data on disk. If so, deserialise it
+    // and stick it in the injection buffer, then remove the file.
     if (std::filesystem::exists(serialised_buffer_filename_)) {
       std::ifstream serialised(serialised_buffer_filename_);
+
       if (serialised.is_open() && serialised.good()) {
         spdlog::info("Reading serialised injection buffer from disk.");
         std::stringstream data;
@@ -85,6 +107,9 @@ class RemoteLogger {
     inject_cv_.notify_one();
     if (inject_thread_.joinable()) inject_thread_.join();
 
+    // At this point, the injection thread has completed, so we can play with
+    // the injection buffer without acquiring the protection mutex. Deserialise
+    // anything still in the injection buffer to disk for next time
     if (!buffer_.empty()) {
       spdlog::info("Serialising injection buffer to disk.");
       auto serialised = serialise_buffer();
@@ -104,7 +129,7 @@ class RemoteLogger {
    * Have factored this out here rather than have it in the constructor since it
    * makes unit testing the serialisation/ deserialisation of the injection
    * buffer a little easier (can make it so that the injection buffer never gets
-   * flushed).
+   * flushed across the socket). Sure there's a cleverer way to accomplish this.
    */
   void run() {
     inject_thread_ = std::thread([this] { injection(); });
@@ -117,6 +142,7 @@ class RemoteLogger {
    */
   void log_state(const std::string& state) {
     auto post_msg = create_post_message(state);
+
     spdlog::debug("Queueing datum to injection buffer.");
     std::lock_guard<std::mutex> lock(buffer_mutex_);
     buffer_.push_back(std::move(post_msg));
@@ -164,8 +190,8 @@ class RemoteLogger {
       // states in the injection buffer
       auto data = std::move(buffer_);
 
-      // Unlock here so sensors can still dump to the buffer even if we need
-      // to re-establish a connection
+      // Unlock here so sensors aren't waiting on the injection thread to send
+      // data to the remote host or trying to re-establish a connection
       lock.unlock();
 
       spdlog::debug(
@@ -176,6 +202,7 @@ class RemoteLogger {
       while (!data.empty()) {
         auto datum = std::move(data.front());
         data.pop_front();
+
         // If we can't send the data for some unforeseen circumstance, just
         // default to assuming the connection is broken and attempt to
         // re-establish, then try to send again
@@ -244,6 +271,10 @@ class RemoteLogger {
    * @brief Deserialise the injection buffer. Take the serialised injection
    * buffer and parse out the sensor states, dumping them into the injection
    * buffer.
+   *
+   * Note that we're assuming there's no contention for the injection buffer
+   * here; the injection thread shouldn't have started when this is called, nor
+   * should sensors be trying to dump state to the buffer.
    * @param serialised The serialised injection buffer.
    */
   void deserialise_buffer(const std::string& serialised) {

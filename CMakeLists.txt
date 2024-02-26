@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 add_compile_options(
-  "-g" "-O3" "-Wall" "-Wextra" "-Wno-unused-function"
+  "-O3" "-Wall" "-Wextra" "-Wno-unused-function"
   )
 
 find_package(spdlog REQUIRED)

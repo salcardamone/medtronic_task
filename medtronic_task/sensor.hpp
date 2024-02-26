@@ -1,5 +1,5 @@
 /**
- * @brief
+ * @brief Sensor implementation; this was provided, mostly, by Medtronic.
  */
 #ifndef __MEDTRONIC_TASK_SENSOR_HPP
 #define __MEDTRONIC_TASK_SENSOR_HPP
@@ -11,14 +11,14 @@
 #include <random>
 #include <iomanip>
 // Third-Party Libraries
-#include <spdlog/spdlog.h>
+#include "spdlog/spdlog.h"
 // Project Inclusions
 //
 
 namespace medtronic {
 
 /**
- *
+ * @brief Sensor class.
  */
 class Sensor {
  public:

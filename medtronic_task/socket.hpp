@@ -1,5 +1,5 @@
 /**
- * @brief
+ * @brief Wrappers around low-level networking bits and pieces.
  */
 #ifndef __MEDTRONIC_TASK_SOCKET_HPP
 #define __MEDTRONIC_TASK_SOCKET_HPP
@@ -38,7 +38,7 @@ class ClientSocketInterface {
 
   /**
    * @brief Establish a connection with a remote host.
-   * @return 0 one success, 1 on failure.
+   * @return 0 on success, 1 on failure.
    */
   virtual int connectx() = 0;
 
@@ -62,7 +62,7 @@ class ClientSocketInterface {
 class ClientSocket : public ClientSocketInterface {
  public:
   /**
-   * @brief Class constructor.
+   * @brief Class constructor. Will attempt to connect to remote host.
    * @param host Hostname we're trying to connect to.
    * @param port Port we're trying to connect to.
    */
@@ -89,15 +89,17 @@ class ClientSocket : public ClientSocketInterface {
     // We want the socket to be non-blocking so that if the socket buffer
     // overflows, then the subsequent send() won't block, but will return an
     // EWOULDBLOCK which we can use to trigger re-connection attempts
+    //
+    // This doesn't matter too much for this application, just thought it'd be
+    // cool
     sockfd_ = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (sockfd_ == -1) {
       spdlog::error("Error creating socket.");
-      // std::cerr << "Error creating socket." << std::endl;
       return -1;
     }
 
-    struct hostent* he = gethostbyname(host_.c_str());
-    if (he == nullptr) {
+    struct hostent* host_entity = gethostbyname(host_.c_str());
+    if (host_entity == nullptr) {
       spdlog::error("Error resolving hostname.");
       close(sockfd_);
       return -1;
@@ -105,7 +107,7 @@ class ClientSocket : public ClientSocketInterface {
 
     server_addr_.sin_family = AF_INET;
     server_addr_.sin_port = htons(port_);
-    server_addr_.sin_addr = *((struct in_addr*)he->h_addr);
+    server_addr_.sin_addr = *((struct in_addr*)host_entity->h_addr);
 
     int connect_status =
         connect(sockfd_, (struct sockaddr*)&server_addr_, sizeof(server_addr_));
@@ -160,7 +162,7 @@ class ClientSocket : public ClientSocketInterface {
             // Socket can accept data again -- try the send once again
             if (pollout_happened) {
               spdlog::info("Socket is ready to use once again");
-              // Who knows -- try to re-establish connection
+              // Who knows -- tear down the connection and notify caller
             } else {
               spdlog::error("Unexpected event during poll: {}",
                             pfds[0].revents);
@@ -169,8 +171,8 @@ class ClientSocket : public ClientSocketInterface {
             }
           }
         }
-        // Not sure what the reason for the failed send was -- try to
-        // re-establish connection
+        // Not sure what the reason for the failed send was -- tear down the
+        // connection and notify caller
       } else {
         spdlog::error("Unknown error on send: {}", std::strerror(errno));
         close(sockfd_);

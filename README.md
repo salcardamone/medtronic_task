@@ -11,8 +11,8 @@ The following libraries have been used in the development of this project:
 - CMake (version 3.22)
 - (Optional) docker
 
-Building Instruction
---------------------
+Building Instructions
+---------------------
 You can build the application and its unit tests as follows:
 
 ```bash

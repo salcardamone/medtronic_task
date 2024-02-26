@@ -1,11 +1,11 @@
 /**
- * @brief
+ * @brief Mock interface for socket wrapper class.
  */
 #ifndef __MEDTRONIC_TASK_TEST_MOCK_SOCKET_HPP
 #define __MEDTRONIC_TASK_TEST_MOCK_SOCKET_HPP
 
 // C++ Standard Libraries
-//
+#include <string>
 // Third-Party Libraries
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -14,6 +14,10 @@
 
 namespace medtronic {
 
+/**
+ * @brief Mock socket wrapper. Expose those methods we'll be using in unit
+ * testing.
+ */
 class MockClientSocket : public ClientSocketInterface {
  public:
   MOCK_METHOD(int, connectx, (), ());
